@@ -49,6 +49,10 @@ class SlidePreviewPanel {
 				enableScripts: true,
 				retainContextWhenHidden: true,
 			});
+			panel.onDidDispose(() => {
+				// Explicitly destroy the singleton.
+				SlidePreviewPanel._instance = undefined;
+			});
 			SlidePreviewPanel._instance = new SlidePreviewPanel(panel, context);
 		}
 		return SlidePreviewPanel._instance;
