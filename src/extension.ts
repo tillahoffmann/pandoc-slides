@@ -2,6 +2,7 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import * as yamlfrontmatter from 'yaml-front-matter';
+import * as path from 'path';
 import { writeFileSync } from 'fs';
 import { exec } from 'child_process';
 import { fileSync } from 'tmp';
@@ -26,29 +27,103 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 // This method is called when your extension is deactivated
-export function deactivate() {}
+export function deactivate() { }
+
+/**
+ * Singleton preview panel for slides.
+ */
+class SlidePreviewPanel {
+	private static _instance: SlidePreviewPanel | undefined;
+	private readonly _panel: vscode.WebviewPanel;
+	private _fileName: string | undefined;
+	private _indexh: number;
+	private _indexv: number;
+	private _context: vscode.ExtensionContext;
+
+	/**
+	 * Get the singleton instance and instantiate the webview.
+	 */
+	public static getInstance(context: vscode.ExtensionContext) {
+		if (!SlidePreviewPanel._instance) {
+			const panel = vscode.window.createWebviewPanel("slidePreview", "Preview ...", 2, {
+				enableScripts: true,
+				retainContextWhenHidden: true,
+			});
+			SlidePreviewPanel._instance = new SlidePreviewPanel(panel, context);
+		}
+		return SlidePreviewPanel._instance;
+	}
+
+	private constructor(panel: vscode.WebviewPanel, context: vscode.ExtensionContext) {
+		this._context = context;
+		this._panel = panel;
+		this._indexh = this._indexv = 0;
+		this._panel.webview.onDidReceiveMessage(message => {
+			// Handle the `slidechanged` event and store the indices so we can jump straight back to
+			// the original slide when the preview is refreshed.
+			if (message.type === "slidechanged") {
+				this._indexh = message.indexh;
+				this._indexv = message.indexv;
+			}
+		});
+	}
+
+	public update() {
+		const document = vscode.window.activeTextEditor!.document;
+		// Update the status of the webview.
+		this._panel.title = `Preview ${document.fileName.split(/[\\/]/).pop()}`;
+
+		// Load the frontmatter and set defaults. We'll be loading the active file and writing to
+		// stdout.
+		let frontmatter = yamlfrontmatter.loadFront(document.getText());
+		let pandoc = frontmatter.pandoc ?? {};
+		pandoc["input-file"] = document.fileName;
+		pandoc["output-file"] = "-";
+
+		// Build the includes for the header.
+		pandoc.variables ??= {};
+		pandoc.variables["header-includes"] ??= [];
+
+		// Push the webview uri (which requires a trailing slash).
+		const documentUri = vscode.Uri.file(path.dirname(document.fileName));
+		pandoc.variables["header-includes"].push(`<meta name="document-webview-uri" content="${this._panel.webview.asWebviewUri(documentUri)}/">`);
+		// Push the plugin code.
+		const pluginUri = vscode.Uri.joinPath(this._context.extensionUri, "assets", "plugin.js");
+		pandoc.variables["header-includes"].push(`<script src="${this._panel.webview.asWebviewUri(pluginUri)}"></script>`);
+
+
+		// Write the content to a temporary file and call pandoc.
+		const tmpfile = fileSync({
+			postfix: ".yaml"
+		});
+		writeFileSync(tmpfile.fd, JSON.stringify(pandoc));
+		exec(
+			`pandoc --standalone -d ${tmpfile.name}`, { cwd: path.dirname(document.fileName) },
+			(error, stdout, stderr) => {
+				if (error) {
+					this._panel.webview.html = `<pre style="white-space: pre-wrap;">${stderr}</pre>`;
+				} else {
+					// We need to hack the plugin until https://github.com/jgm/pandoc/issues/6401 is resolved.
+					stdout = stdout.replace(
+						/reveal\.js plugins\n\s*plugins: \[/,
+						`reveal.js plugins\nplugins: [ PandocSlides,`,
+					);
+					this._panel.webview.html = stdout;
+
+					// Execute a navigation event to get back to the previous slide.
+					if (document.fileName === this._fileName) {
+						this._panel.webview.postMessage({
+							"method": "slide",
+							"args": [this._indexh, this._indexv],
+						});
+					}
+					this._fileName = document.fileName;
+				}
+				tmpfile.removeCallback();
+			});
+	}
+}
 
 async function showSidePreview(context: vscode.ExtensionContext) {
-	const panel = vscode.window.createWebviewPanel('liveHTMLPreviewer', 'Preview', 2, {
-		enableScripts: true,
-		retainContextWhenHidden: true,
-	});
-	// Load the frontmatter and set sensible defaults.
-	let frontmatter = yamlfrontmatter.loadFront(vscode.window.activeTextEditor!.document.getText());
-	let pandoc = frontmatter.pandoc ?? {};
-	pandoc["input-file"] = vscode.window.activeTextEditor?.document.fileName;
-	pandoc["output-file"] = "-";
-	// Write the content to a temporary file and call pandoc.
-	const tmpfile = fileSync({
-		postfix: ".yaml"
-	});
-	writeFileSync(tmpfile.fd, JSON.stringify(pandoc));
-	exec(`pandoc -d ${tmpfile.name}`, (error, stdout, stderr) => {
-		if(error) {
-			panel.webview.html = `<pre style="white-space: pre-wrap;">${stderr}</pre>`;
-		} else {
-			panel.webview.html = stdout;
-		}
-		tmpfile.removeCallback();
-	});
+	SlidePreviewPanel.getInstance(context).update();
 }
