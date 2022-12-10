@@ -83,6 +83,8 @@ class SlidePreviewPanel {
 		let pandoc = frontmatter.pandoc ?? {};
 		pandoc["input-file"] = document.fileName;
 		pandoc["output-file"] = "-";
+		pandoc["to"] ??= "revealjs";
+		pandoc["from"] ??= "commonmark_x+sourcepos";
 
 		// Build the includes for the header.
 		pandoc.variables ??= {};

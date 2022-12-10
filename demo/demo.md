@@ -1,7 +1,5 @@
 ---
 pandoc:
-    from: commonmark_x+sourcepos
-    to: revealjs
     html-math-method:
         method: katex
     variables:
