@@ -40,3 +40,13 @@ window.addEventListener('message', event => {
     console.log(event);
     Reveal[event.data.method](...event.data.args);
 });
+
+
+// Jump to the markdown section.
+window.addEventListener("dblclick", event => {
+    const dataPos = event.target.getAttribute("data-pos");
+    vscode.postMessage({
+        type: "sourcepos",
+        value: dataPos,
+    });
+});

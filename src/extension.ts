@@ -49,10 +49,6 @@ class SlidePreviewPanel {
 				enableScripts: true,
 				retainContextWhenHidden: true,
 			});
-			panel.onDidDispose(() => {
-				// Explicitly destroy the singleton.
-				SlidePreviewPanel._instance = undefined;
-			});
 			SlidePreviewPanel._instance = new SlidePreviewPanel(panel, context);
 		}
 		return SlidePreviewPanel._instance;
@@ -68,7 +64,18 @@ class SlidePreviewPanel {
 			if (message.type === "slidechanged") {
 				this._indexh = message.indexh;
 				this._indexv = message.indexv;
+			} else if (message.type === "sourcepos") {
+				const positions: [number, number, number, number ]=
+					message.value.split("@").pop().split(/[:-]/).map((x: string) => parseInt(x));
+				const range = new vscode.Range(...positions);
+				console.log(`received range navigation ${range}`);
+			} else {
+				console.log(`received unexpected message ${message}`);
 			}
+		});
+		this._panel.onDidDispose(() => {
+			// Explicitly destroy the singleton.
+			SlidePreviewPanel._instance = undefined;
 		});
 	}
 
@@ -124,6 +131,8 @@ class SlidePreviewPanel {
 						});
 					}
 					this._fileName = document.fileName;
+					// Show any warnings in the logs anyway. We should probably use the vscode console.
+					console.log(stderr);
 				}
 				tmpfile.removeCallback();
 			});
