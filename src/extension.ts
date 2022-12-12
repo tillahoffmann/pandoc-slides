@@ -106,7 +106,7 @@ class SlidePreviewPanel {
 			this.pairedEditor!.selection = new vscode.Selection(range.start, range.end);
 			this.pairedEditor?.revealRange(range);
 		} else if (message.type === "sourcepos") {
-			this.sourceposLookup.push(message);
+			this.sourceposLookup = message.records;
 		} else {
 			console.log(`received unexpected message ${JSON.stringify(message)}`);
 		}

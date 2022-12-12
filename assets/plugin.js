@@ -34,19 +34,24 @@ let PandocSlides = {
             });
         });
 
-        // Walk over all slides and send the markdown code positions back to vscode.
+        // Walk over all slides and send the markdown code positions with matched slide indices back
+        // to vscode.
+        let records = [];
         deck.getSlides().forEach(slide => {
             const sourcepos = slide.getAttribute("data-pos");
             if (!sourcepos) {
                 return;
             }
             const indices = deck.getIndices(slide);
-            vscode.postMessage({
-                type: "sourcepos",
+            records.push({
+                sourcepos: sourcepos,
                 indexh: indices.h,
                 indexv: indices.v,
-                sourcepos: sourcepos,
             });
+        });
+        vscode.postMessage({
+            type: "sourcepos",
+            records: records,
         });
     }
 };
