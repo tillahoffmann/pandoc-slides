@@ -134,15 +134,26 @@ class SlidePreviewPanel {
 			// ... and dump the pandoc config (https://pandoc.org/MANUAL.html#defaults-files).
 			await fs.promises.writeFile(tmpfile.path, JSON.stringify(pandoc));
 			// Generate the html.
-			let {stdout, stderr} = await promisify(child_process.execFile)("pandoc", [
-				"--standalone", "-d", tmpfile.path
-			]);
-			// We need to hack the plugin until https://github.com/jgm/pandoc/issues/6401 is resolved.
-			stdout = stdout.replace(
-				/reveal\.js plugins\n\s*plugins: \[/,
-				`reveal.js plugins\nplugins: [ PandocSlides,`,
-			);
-			return stdout;
+			try {
+				let {stdout, stderr} = await promisify(child_process.execFile)("pandoc", [
+					"--standalone", "-d", tmpfile.path
+				]);
+				// We need to hack the plugin until https://github.com/jgm/pandoc/issues/6401 is resolved.
+				stdout = stdout.replace(
+					/reveal\.js plugins\n\s*plugins: \[/,
+					`reveal.js plugins\nplugins: [ PandocSlides,`,
+				);
+				return stdout;
+			} catch (error: any) {
+				vscode.window.showErrorMessage(`Failed to compile slides: ${error.stderr}.`);
+				const errorUri = vscode.Uri.joinPath(this._context.extensionUri, "assets",
+					vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Light ?
+					"error-light.svg" : "error-dark.svg");
+				return `
+				<h1><img src="${this._panel.webview.asWebviewUri(errorUri)}"> Failed to compile slides.</h1>
+				<pre style="white-space: pre-wrap;">${error}</pre>
+				`;
+			}
 		}, {postfix: ".yaml"});
 		return html;
 	}
