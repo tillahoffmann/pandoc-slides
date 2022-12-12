@@ -5,6 +5,7 @@ pandoc:
     variables:
         theme: white
         css: demo.css
+        controlsTutorial: false
 title: Habits
 author: John Doe
 date: March 22, 2005
