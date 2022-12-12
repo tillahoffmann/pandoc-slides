@@ -37,6 +37,7 @@ export function deactivate() { }
 class SlidePreviewPanel {
 	private static _instance: SlidePreviewPanel | undefined;
 	private readonly _panel: vscode.WebviewPanel;
+	private readonly _context: vscode.ExtensionContext;
 	private _pairedEditor: vscode.TextEditor | undefined;
 	private _indexh: number = 0;
 	private _indexv: number = 0;
@@ -44,14 +45,15 @@ class SlidePreviewPanel {
 	/**
 	 * Get the singleton instance.
 	 */
-	public static getInstance() {
+	public static getInstance(context: vscode.ExtensionContext) {
 		if (!SlidePreviewPanel._instance) {
-			SlidePreviewPanel._instance = new SlidePreviewPanel();
+			SlidePreviewPanel._instance = new SlidePreviewPanel(context);
 		}
 		return SlidePreviewPanel._instance;
 	}
 
-	private constructor() {
+	private constructor(context: vscode.ExtensionContext) {
+		this._context = context;
 		// Create the preview panel and destroy it when the webview is disposed off, e.g., by the
 		// user.
 		this._panel = vscode.window.createWebviewPanel(
@@ -59,6 +61,10 @@ class SlidePreviewPanel {
 				enableScripts: true,
 				retainContextWhenHidden: true,
 		});
+		this._panel.iconPath = {
+			light: vscode.Uri.joinPath(this._context.extensionUri, "assets", "versions-light.svg"),
+			dark: vscode.Uri.joinPath(this._context.extensionUri, "assets", "versions-dark.svg"),
+		};
 		this._panel.onDidDispose(() => {
 			SlidePreviewPanel._instance = undefined;
 		});
@@ -82,7 +88,7 @@ class SlidePreviewPanel {
 		}
 	}
 
-	public async showPreview(context: vscode.ExtensionContext) {
+	public async showPreview() {
 		// Reset any state if the uri of the file to be previewed has changed.
 		if (this._pairedEditor && this._pairedEditor!.document.uri !== vscode.window.activeTextEditor!.document.uri) {
 			this._indexh = this._indexv = 0;
@@ -90,7 +96,7 @@ class SlidePreviewPanel {
 		// Store the paired editor, update the title, html, and show the document.
 		this._pairedEditor = vscode.window.activeTextEditor;
 		this._panel.title = `Preview ${path.basename(this._pairedEditor!.document.fileName)}`;
-		this._panel.webview.html = await this._getHtmlContent(context);
+		this._panel.webview.html = await this._getHtmlContent();
 		this._panel.reveal();
 
 		// Post a message to navigate back to the slide we were on.
@@ -100,7 +106,7 @@ class SlidePreviewPanel {
 		});
 	}
 
-	private async _getHtmlContent(context: vscode.ExtensionContext) {
+	private async _getHtmlContent() {
 		// Load the frontmatter and set defaults. We'll be loading the active file and writing to
 		// stdout.
 		const document = this._pairedEditor!.document;
@@ -118,7 +124,7 @@ class SlidePreviewPanel {
 		const documentUri = vscode.Uri.file(path.dirname(document.fileName));
 		pandoc.variables["header-includes"].push(`<meta name="document-webview-uri" content="${this._panel.webview.asWebviewUri(documentUri)}/">`);
 		// Push the plugin code.
-		const pluginUri = vscode.Uri.joinPath(context.extensionUri, "assets", "plugin.js");
+		const pluginUri = vscode.Uri.joinPath(this._context.extensionUri, "assets", "plugin.js");
 		pandoc.variables["header-includes"].push(`<script src="${this._panel.webview.asWebviewUri(pluginUri)}"></script>`);
 		// Push a random value so the webview content is reloaded.
 		pandoc.variables["header-includes"].push(`<meta name="webview-uuid" content="${uuid.v4()}">`);
@@ -143,5 +149,5 @@ class SlidePreviewPanel {
 }
 
 async function showSidePreview(context: vscode.ExtensionContext) {
-	await SlidePreviewPanel.getInstance().showPreview(context);
+	await SlidePreviewPanel.getInstance(context).showPreview();
 }
