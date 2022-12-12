@@ -33,13 +33,27 @@ let PandocSlides = {
                 indexv: event.indexv,
             });
         });
+
+        // Walk over all slides and send the markdown code positions back to vscode.
+        deck.getSlides().forEach(slide => {
+            const sourcepos = slide.getAttribute("data-pos");
+            if (!sourcepos) {
+                return;
+            }
+            const indices = deck.getIndices(slide);
+            vscode.postMessage({
+                type: "sourcepos",
+                indexh: indices.h,
+                indexv: indices.v,
+                sourcepos: sourcepos,
+            });
+        });
     }
 };
 
 
 // Receive messages from VS Code and forward them to the reveal.js API (https://revealjs.com/api/).
 window.addEventListener('message', event => {
-    console.log(event);
     Reveal[event.data.method](...event.data.args);
 });
 
@@ -48,7 +62,7 @@ window.addEventListener('message', event => {
 window.addEventListener("dblclick", event => {
     const dataPos = event.target.getAttribute("data-pos");
     vscode.postMessage({
-        type: "sourcepos",
+        type: "sourcepos-navigate",
         value: dataPos,
     });
 });
