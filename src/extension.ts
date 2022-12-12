@@ -3,9 +3,11 @@
 import * as vscode from 'vscode';
 import * as yamlfrontmatter from 'yaml-front-matter';
 import * as path from 'path';
-import { writeFileSync } from 'fs';
-import { exec } from 'child_process';
-import { fileSync } from 'tmp';
+import * as fs from 'fs';
+import * as child_process from 'child_process';
+import * as tmp from 'tmp-promise';
+import * as uuid from 'uuid';
+import { promisify } from 'util';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -35,57 +37,73 @@ export function deactivate() { }
 class SlidePreviewPanel {
 	private static _instance: SlidePreviewPanel | undefined;
 	private readonly _panel: vscode.WebviewPanel;
-	private _fileName: string | undefined;
-	private _indexh: number;
-	private _indexv: number;
-	private _context: vscode.ExtensionContext;
+	private _pairedEditor: vscode.TextEditor | undefined;
+	private _indexh: number = 0;
+	private _indexv: number = 0;
 
 	/**
-	 * Get the singleton instance and instantiate the webview.
+	 * Get the singleton instance.
 	 */
-	public static getInstance(context: vscode.ExtensionContext) {
+	public static getInstance() {
 		if (!SlidePreviewPanel._instance) {
-			const panel = vscode.window.createWebviewPanel("slidePreview", "Preview ...", 2, {
-				enableScripts: true,
-				retainContextWhenHidden: true,
-			});
-			SlidePreviewPanel._instance = new SlidePreviewPanel(panel, context);
+			SlidePreviewPanel._instance = new SlidePreviewPanel();
 		}
 		return SlidePreviewPanel._instance;
 	}
 
-	private constructor(panel: vscode.WebviewPanel, context: vscode.ExtensionContext) {
-		this._context = context;
-		this._panel = panel;
-		this._indexh = this._indexv = 0;
-		this._panel.webview.onDidReceiveMessage(message => {
-			// Handle the `slidechanged` event and store the indices so we can jump straight back to
-			// the original slide when the preview is refreshed.
-			if (message.type === "slidechanged") {
-				this._indexh = message.indexh;
-				this._indexv = message.indexv;
-			} else if (message.type === "sourcepos") {
-				const positions: [number, number, number, number ]=
-					message.value.split("@").pop().split(/[:-]/).map((x: string) => parseInt(x));
-				const range = new vscode.Range(...positions);
-				console.log(`received range navigation ${range}`);
-			} else {
-				console.log(`received unexpected message ${message}`);
-			}
+	private constructor() {
+		// Create the preview panel and destroy it when the webview is disposed off, e.g., by the
+		// user.
+		this._panel = vscode.window.createWebviewPanel(
+			"slidePreview", "Preview [basename]", vscode.ViewColumn.Two, {
+				enableScripts: true,
+				retainContextWhenHidden: true,
 		});
 		this._panel.onDidDispose(() => {
-			// Explicitly destroy the singleton.
 			SlidePreviewPanel._instance = undefined;
+		});
+		this._panel.webview.onDidReceiveMessage(this._handleWebviewMessage.bind(this));
+	}
+
+	private _handleWebviewMessage(message: any) {
+		// Handle the `slidechanged` event and store the indices so we can jump straight back to the
+		// original slide when the preview is refreshed.
+		if (message.type === "slidechanged") {
+			this._indexh = message.indexh;
+			this._indexv = message.indexv;
+		} else if (message.type === "sourcepos") {
+			const [startLine, startChar, endLine, endChar]: [number, number, number, number] =
+				message.value.split("@").pop().split(/[:-]/).map((x: string) => parseInt(x));
+			const range = new vscode.Range(startLine - 1, startChar - 1, endLine - 1, endChar - 1);
+			this._pairedEditor!.selection = new vscode.Selection(range.start, range.end);
+			this._pairedEditor?.revealRange(range);
+		} else {
+			console.log(`received unexpected message ${message}`);
+		}
+	}
+
+	public async showPreview(context: vscode.ExtensionContext) {
+		// Reset any state if the uri of the file to be previewed has changed.
+		if (this._pairedEditor && this._pairedEditor!.document.uri !== vscode.window.activeTextEditor!.document.uri) {
+			this._indexh = this._indexv = 0;
+		}
+		// Store the paired editor, update the title, html, and show the document.
+		this._pairedEditor = vscode.window.activeTextEditor;
+		this._panel.title = `Preview ${path.basename(this._pairedEditor!.document.fileName)}`;
+		this._panel.webview.html = await this._getHtmlContent(context);
+		this._panel.reveal();
+
+		// Post a message to navigate back to the slide we were on.
+		this._panel.webview.postMessage({
+			"method": "slide",
+			"args": [this._indexh, this._indexv],
 		});
 	}
 
-	public update() {
-		const document = vscode.window.activeTextEditor!.document;
-		// Update the status of the webview.
-		this._panel.title = `Preview ${document.fileName.split(/[\\/]/).pop()}`;
-
+	private async _getHtmlContent(context: vscode.ExtensionContext) {
 		// Load the frontmatter and set defaults. We'll be loading the active file and writing to
 		// stdout.
+		const document = this._pairedEditor!.document;
 		let frontmatter = yamlfrontmatter.loadFront(document.getText());
 		let pandoc = frontmatter.pandoc ?? {};
 		pandoc["input-file"] = document.fileName;
@@ -96,49 +114,34 @@ class SlidePreviewPanel {
 		// Build the includes for the header.
 		pandoc.variables ??= {};
 		pandoc.variables["header-includes"] ??= [];
-
 		// Push the webview uri (which requires a trailing slash).
 		const documentUri = vscode.Uri.file(path.dirname(document.fileName));
 		pandoc.variables["header-includes"].push(`<meta name="document-webview-uri" content="${this._panel.webview.asWebviewUri(documentUri)}/">`);
 		// Push the plugin code.
-		const pluginUri = vscode.Uri.joinPath(this._context.extensionUri, "assets", "plugin.js");
+		const pluginUri = vscode.Uri.joinPath(context.extensionUri, "assets", "plugin.js");
 		pandoc.variables["header-includes"].push(`<script src="${this._panel.webview.asWebviewUri(pluginUri)}"></script>`);
+		// Push a random value so the webview content is reloaded.
+		pandoc.variables["header-includes"].push(`<meta name="webview-uuid" content="${uuid.v4()}">`);
 
-
-		// Write the content to a temporary file and call pandoc.
-		const tmpfile = fileSync({
-			postfix: ".yaml"
-		});
-		writeFileSync(tmpfile.fd, JSON.stringify(pandoc));
-		exec(
-			`pandoc --standalone -d ${tmpfile.name}`, { cwd: path.dirname(document.fileName) },
-			(error, stdout, stderr) => {
-				if (error) {
-					this._panel.webview.html = `<pre style="white-space: pre-wrap;">${stderr}</pre>`;
-				} else {
-					// We need to hack the plugin until https://github.com/jgm/pandoc/issues/6401 is resolved.
-					stdout = stdout.replace(
-						/reveal\.js plugins\n\s*plugins: \[/,
-						`reveal.js plugins\nplugins: [ PandocSlides,`,
-					);
-					this._panel.webview.html = stdout;
-
-					// Execute a navigation event to get back to the previous slide.
-					if (document.fileName === this._fileName) {
-						this._panel.webview.postMessage({
-							"method": "slide",
-							"args": [this._indexh, this._indexv],
-						});
-					}
-					this._fileName = document.fileName;
-					// Show any warnings in the logs anyway. We should probably use the vscode console.
-					console.log(stderr);
-				}
-				tmpfile.removeCallback();
-			});
+		// Create a temporary file ...
+		let html = tmp.withFile(async (tmpfile) => {
+			// ... and dump the pandoc config (https://pandoc.org/MANUAL.html#defaults-files).
+			await fs.promises.writeFile(tmpfile.path, JSON.stringify(pandoc));
+			// Generate the html.
+			let {stdout, stderr} = await promisify(child_process.execFile)("pandoc", [
+				"--standalone", "-d", tmpfile.path
+			]);
+			// We need to hack the plugin until https://github.com/jgm/pandoc/issues/6401 is resolved.
+			stdout = stdout.replace(
+				/reveal\.js plugins\n\s*plugins: \[/,
+				`reveal.js plugins\nplugins: [ PandocSlides,`,
+			);
+			return stdout;
+		}, {postfix: ".yaml"});
+		return html;
 	}
 }
 
 async function showSidePreview(context: vscode.ExtensionContext) {
-	SlidePreviewPanel.getInstance(context).update();
+	await SlidePreviewPanel.getInstance().showPreview(context);
 }

@@ -1,0 +1,21 @@
+/*
+Example theme loosely based on https://www.hsph.harvard.edu/communications-guide/design/colors/. See
+https://github.com/hakimel/reveal.js/blob/master/css/theme/template/exposer.scss for details and
+https://github.com/hakimel/reveal.js/blob/master/css/theme/source/white.scss for default values of
+the white theme.
+*/
+:root {
+    --brand-color: #A51C30;
+    --r-heading-color: var(--brand-color);
+    --r-main-color: #595859;
+    --r-link-color: #007ead;
+    --r-link-color-dark: #00658c;
+}
+
+.slide .level1 {
+    background-color: #A51C30;
+}
+
+.slide .level1 h1 {
+    color: white;
+}

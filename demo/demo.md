@@ -4,6 +4,7 @@ pandoc:
         method: katex
     variables:
         theme: white
+        css: demo.css
 title: Habits
 author: John Doe
 date: March 22, 2005
