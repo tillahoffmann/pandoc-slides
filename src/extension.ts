@@ -172,6 +172,7 @@ class SlidePreviewPanel {
 			};
 			this._panel.onDidDispose(() => {
 				this._panel = undefined;
+				this._pairedEditor = undefined;
 			});
 			this._panel.webview.onDidReceiveMessage(this._handleWebviewMessage.bind(this));
 		} else {
