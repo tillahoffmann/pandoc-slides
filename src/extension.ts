@@ -23,6 +23,8 @@ export function activate(context: vscode.ExtensionContext) {
 			scheme: "file",
 			language: "markdown",
 		}, slidePreviewPanel.codeLensProvider),
+		vscode.workspace.onDidSaveTextDocument(slidePreviewPanel.onDidSaveTextDocument.bind(slidePreviewPanel)),
+		vscode.workspace.onDidChangeTextDocument(slidePreviewPanel.onDidChangeTextDocument.bind(slidePreviewPanel)),
 	);
 }
 
@@ -38,6 +40,12 @@ class CodeLensProvider implements vscode.CodeLensProvider {
 	public updateCodeLenses(documentUri: vscode.Uri, records: Array<any>) {
 		this._documentUri = documentUri;
 		this._records = records;
+		this._onDidChangeCodeLenses.fire();
+	}
+
+	public resetCodeLenses() {
+		this._documentUri = undefined;
+		this._records = undefined;
 		this._onDidChangeCodeLenses.fire();
 	}
 
@@ -82,11 +90,23 @@ class SlidePreviewPanel {
 		this.codeLensProvider = new CodeLensProvider();
 	}
 
-	public navigate(indexh: number, indexv: number) {
-		this._panel!.webview.postMessage({
-			"method": "slide",
-			"args": [indexh, indexv],
-		});
+	public onDidSaveTextDocument(document: vscode.TextDocument) {
+		// Compile the document on save.
+		if(this._pairedEditor && this._pairedEditor.document.uri === document.uri) {
+			this.showPreview();
+		}
+	}
+
+	public onDidChangeTextDocument(event: vscode.TextDocumentChangeEvent) {
+		// Remove code lenses if lines were inserted or deleted.
+		if (this._pairedEditor && this._pairedEditor.document.uri === event.document.uri) {
+			for (let change of event.contentChanges) {
+				if (!change.range.isSingleLine || change.text.includes("\n")) {
+					this.codeLensProvider.resetCodeLenses();
+					return;
+				}
+			}
+		}
 	}
 
 	private _handleWebviewMessage(message: any) {
@@ -132,7 +152,7 @@ class SlidePreviewPanel {
 		}
 
 		// Reset any state if the uri of the file to be previewed has changed and pair the editor.
-		if (this._pairedEditor && this._pairedEditor.document.uri !== vscode.window.activeTextEditor.document.uri) {
+		if (this._pairedEditor !== vscode.window.activeTextEditor) {
 			this._indexh = this._indexv = 0;
 		}
 		this._pairedEditor = vscode.window.activeTextEditor;
