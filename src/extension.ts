@@ -93,7 +93,7 @@ class SlidePreviewPanel {
 		// Compile the document on save.
 		if(vscode.workspace.getConfiguration("pandocSlides").get("compileOnSave")
 		   && this._pairedEditor && this._pairedEditor.document.uri === document.uri) {
-			this.showPreview();
+			this.showPreview(false);
 		}
 	}
 
@@ -145,7 +145,7 @@ class SlidePreviewPanel {
 		}
 	}
 
-	public async showPreview() {
+	public async showPreview(reveal: boolean) {
 		// Abort if there is no active editor.
 		if (!vscode.window.activeTextEditor) {
 			return;
@@ -179,7 +179,9 @@ class SlidePreviewPanel {
 		}
 
 		this._panel.webview.html = await this._getHtmlContent();
+		if (reveal) {
 		this._panel.reveal();
+		}
 	}
 
 	private async _getHtmlContent() {
