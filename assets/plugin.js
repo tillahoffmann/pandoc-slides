@@ -40,10 +40,12 @@ let PandocSlides = {
             if (indices) {
                 // Parse the indices and navigate to the desired slide without transition.
                 indices = indices.split(",");
-                let transition = Reveal.getConfig().transition;
-                Reveal.configure({transition: "none"});
+                const config = Reveal.getConfig();
+                const transition = config.transition;
+                const backgroundTransition = config.backgroundTransition;
+                Reveal.configure({transition: "none", backgroundTransition: "none"});
                 Reveal.slide(parseInt(indices[0]), parseInt(indices[1]));
-                Reveal.configure({transition: transition});
+                Reveal.configure({transition: transition, backgroundTransition: backgroundTransition});
             }
         });
 
