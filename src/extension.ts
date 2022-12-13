@@ -101,6 +101,7 @@ class SlidePreviewPanel {
 		// Remove code lenses if lines were inserted or deleted.
 		if (this._pairedEditor && this._pairedEditor.document.uri === event.document.uri) {
 			for (let change of event.contentChanges) {
+				console.log("line delta", change.range.start.line - change.range.end.line + change.text.split("\n").length - 1);
 				if (!change.range.isSingleLine || change.text.includes("\n")) {
 					this.codeLensProvider.resetCodeLenses();
 					return;
@@ -180,7 +181,7 @@ class SlidePreviewPanel {
 
 		this._panel.webview.html = await this._getHtmlContent();
 		if (reveal) {
-		this._panel.reveal();
+			this._panel.reveal();
 		}
 	}
 
