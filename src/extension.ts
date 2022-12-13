@@ -180,12 +180,6 @@ class SlidePreviewPanel {
 
 		this._panel.webview.html = await this._getHtmlContent();
 		this._panel.reveal();
-
-		// Post a message to navigate back to the slide we were on.
-		this._panel.webview.postMessage({
-			"method": "slide",
-			"args": [this._indexh, this._indexv],
-		});
 	}
 
 	private async _getHtmlContent() {
@@ -210,6 +204,8 @@ class SlidePreviewPanel {
 		pandoc.variables["header-includes"].push(`<script src="${this._panel!.webview.asWebviewUri(pluginUri)}"></script>`);
 		// Push a random value so the webview content is reloaded.
 		pandoc.variables["header-includes"].push(`<meta name="webview-uuid" content="${uuid.v4()}">`);
+		// Add the slide indices for navigating to the most recent frame.
+		pandoc.variables["header-includes"].push(`<meta name="slide-indices" content="${this._indexh},${this._indexv}">`);
 
 		// Create a temporary file ...
 		let html = tmp.withFile(async (tmpfile) => {

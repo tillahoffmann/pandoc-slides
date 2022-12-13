@@ -34,6 +34,19 @@ let PandocSlides = {
             });
         });
 
+        // Navigate to the active slide once ready.
+        deck.on("ready", event => {
+            let indices = document.querySelector("meta[name='slide-indices']").content;
+            if (indices) {
+                // Parse the indices and navigate to the desired slide without transition.
+                indices = indices.split(",");
+                let transition = Reveal.getConfig().transition;
+                Reveal.configure({transition: "none"});
+                Reveal.slide(parseInt(indices[0]), parseInt(indices[1]));
+                Reveal.configure({transition: transition});
+            }
+        });
+
         // Walk over all slides and send the markdown code positions with matched slide indices back
         // to vscode.
         let records = [];
