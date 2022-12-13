@@ -1,8 +1,3 @@
----
-pandoc:
-    highlight-style: null
----
-
 # 📽️ pandoc-slides
 
 ## Create stunning presentations in markdown

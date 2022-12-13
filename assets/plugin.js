@@ -1,14 +1,17 @@
 const vscode = acquireVsCodeApi();
 
 function maybeReplaceRelativePath(element, attribute) {
-    const documentWebviewUri = document.querySelector("meta[name='document-webview-uri']").content;
+    const parentWebviewUri = document.querySelector("meta[name='parent-webview-uri']").content;
+    if (!parentWebviewUri) {
+        return 0;
+    }
     let path = element.getAttribute(attribute);
     try {
         // If this succeeds, we already have an absolute url.
         new URL(path);
         return 0;
     } catch (error) {
-        path = new URL(path, documentWebviewUri);
+        path = new URL(path, parentWebviewUri);
         element.setAttribute(attribute, path.toString());
         return 1;
     }

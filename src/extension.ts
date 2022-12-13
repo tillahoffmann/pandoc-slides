@@ -74,6 +74,14 @@ function parseRange(value: any) {
 	return new vscode.Range(startLine - 1, startChar - 1, endLine - 1, endChar - 1);
 }
 
+function setAttributeIfUndefined(x: any, key: string, value: any) {
+	if(x[key] === undefined) {
+		x[key] = value;
+		return value;
+	}
+	return x[key];
+}
+
 /**
  * Singleton preview panel for slides.
  */
@@ -197,20 +205,28 @@ class SlidePreviewPanel {
 		pandoc["output-file"] = "-";
 		pandoc["to"] ??= "revealjs";
 		pandoc["from"] ??= "commonmark_x+sourcepos";
+		pandoc["template"] ??= vscode.Uri.joinPath(this._context.extensionUri, "assets", "default.revealjs").toString();
 
-		// Build the includes for the header.
-		pandoc.variables ??= {};
-		pandoc.variables["header-includes"] ??= [];
-		// Push the webview uri (which requires a trailing slash).
-		const documentUri = vscode.Uri.file(path.dirname(document.fileName));
-		pandoc.variables["header-includes"].push(`<meta name="document-webview-uri" content="${this._panel!.webview.asWebviewUri(documentUri)}/">`);
-		// Push the plugin code.
+		// Construct a path for the parent directory of this document so we can load local content.
+		const parentUri = vscode.Uri.file(path.dirname(document.fileName));
+		// Construct a path to the plugin code we need to interface with vscode.
 		const pluginUri = vscode.Uri.joinPath(this._context.extensionUri, "assets", "plugin.js");
-		pandoc.variables["header-includes"].push(`<script src="${this._panel!.webview.asWebviewUri(pluginUri)}"></script>`);
-		// Push a random value so the webview content is reloaded.
-		pandoc.variables["header-includes"].push(`<meta name="webview-uuid" content="${uuid.v4()}">`);
-		// Add the slide indices for navigating to the most recent frame.
-		pandoc.variables["header-includes"].push(`<meta name="slide-indices" content="${this._indexh},${this._indexv}">`);
+		// Build the includes for the header.
+		let variables = setAttributeIfUndefined(pandoc, "variables", {});
+		setAttributeIfUndefined(variables, "header-includes", []).push([
+			`<meta name="parent-webview-uri" content="${this._panel!.webview.asWebviewUri(parentUri)}/">`,
+			// Random value to reload the webview every time.
+			`<meta name="webview-uuid" content="${uuid.v4()}">`,
+			// Slide indices for navigating to the most recently viewed frame after compilation.
+			`<meta name="slide-indices" content="${this._indexh},${this._indexv}">`,
+			`<script src="${this._panel!.webview.asWebviewUri(pluginUri)}"></script>`,
+		]);
+
+		// By default, let's use highlightjs for code ...
+		if(setAttributeIfUndefined(variables, "highlightjs", true)) {
+			// ... and disable the built-in highlighter.
+			setAttributeIfUndefined(pandoc, "highlight-style", null);
+		}
 
 		// Create a temporary file ...
 		let html = tmp.withFile(async (tmpfile) => {
