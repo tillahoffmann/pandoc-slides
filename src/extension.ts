@@ -8,7 +8,6 @@ import * as child_process from 'child_process';
 import * as tmp from 'tmp-promise';
 import * as uuid from 'uuid';
 import { promisify } from 'util';
-import { setFlagsFromString } from 'v8';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
