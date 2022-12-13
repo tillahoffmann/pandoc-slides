@@ -92,7 +92,8 @@ class SlidePreviewPanel {
 
 	public onDidSaveTextDocument(document: vscode.TextDocument) {
 		// Compile the document on save.
-		if(this._pairedEditor && this._pairedEditor.document.uri === document.uri) {
+		if(vscode.workspace.getConfiguration("pandocSlides").get("compileOnSave")
+		   && this._pairedEditor && this._pairedEditor.document.uri === document.uri) {
 			this.showPreview();
 		}
 	}
@@ -126,7 +127,7 @@ class SlidePreviewPanel {
 		// Handle information provided by the slide view so we can navigate from source to the
 		// corresponding slide.
 		} else if (message.type === "sourcepos") {
-			if(this._pairedEditor) {
+			if(vscode.workspace.getConfiguration("pandocSlides").get("showNavigationCodeLenses") && this._pairedEditor) {
 				this.codeLensProvider.updateCodeLenses(this._pairedEditor.document.uri, message.records);
 			}
 		// Log any messages we don't know about for debugging.

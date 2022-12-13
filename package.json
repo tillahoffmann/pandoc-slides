@@ -31,6 +31,21 @@
           "group": "navigation"
         }
       ]
+    },
+    "configuration": {
+      "title": "Pandoc Slides",
+      "properties": {
+        "pandocSlides.compileOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Compile slides on save if they are shown in the preview pane."
+        },
+        "pandocSlides.showNavigationCodeLenses": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show code lenses for jumping from markdown to the corresponding slide."
+        }
+      }
     }
   },
   "scripts": {
