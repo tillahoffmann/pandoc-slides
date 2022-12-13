@@ -30,6 +30,7 @@ export function activate(context: vscode.ExtensionContext) {
 // This method is called when your extension is deactivated
 export function deactivate() { }
 
+
 class CodeLensProvider implements vscode.CodeLensProvider {
 	private readonly _onDidChangeCodeLenses: vscode.EventEmitter<void> = new vscode.EventEmitter<void>();
 	public readonly onDidChangeCodeLenses: vscode.Event<void> = this._onDidChangeCodeLenses.event;
@@ -173,6 +174,7 @@ class SlidePreviewPanel {
 			this._panel.onDidDispose(() => {
 				this._panel = undefined;
 				this._pairedEditor = undefined;
+				this.codeLensProvider.resetCodeLenses();
 			});
 			this._panel.webview.onDidReceiveMessage(this._handleWebviewMessage.bind(this));
 		} else {
