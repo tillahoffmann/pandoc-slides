@@ -209,8 +209,6 @@ class SlidePreviewPanel {
 
 		// Construct a path for the parent directory of this document so we can load local content.
 		const parentUri = vscode.Uri.file(path.dirname(document.fileName));
-		// Construct a path to the plugin code we need to interface with vscode.
-		const pluginUri = vscode.Uri.joinPath(this._context.extensionUri, "assets", "plugin.js");
 		// Build the includes for the header.
 		let variables = setAttributeIfUndefined(pandoc, "variables", {});
 		setAttributeIfUndefined(variables, "header-includes", []).push([
@@ -219,8 +217,10 @@ class SlidePreviewPanel {
 			`<meta name="webview-uuid" content="${uuid.v4()}">`,
 			// Slide indices for navigating to the most recently viewed frame after compilation.
 			`<meta name="slide-indices" content="${this._indexh},${this._indexv}">`,
-			`<script src="${this._panel!.webview.asWebviewUri(pluginUri)}"></script>`,
 		]);
+		// Construct a path to the plugin code we need to interface with vscode.
+		const pluginUri = vscode.Uri.joinPath(this._context.extensionUri, "assets", "plugin.js");
+		variables["pandoc-slides-plugin-url"] = this._panel!.webview.asWebviewUri(pluginUri).toString();
 
 		// By default, let's use highlightjs for code ...
 		if(setAttributeIfUndefined(variables, "highlightjs", true)) {
@@ -237,11 +237,6 @@ class SlidePreviewPanel {
 				let {stdout, stderr} = await promisify(child_process.execFile)("pandoc", [
 					"--standalone", "-d", tmpfile.path
 				]);
-				// We need to hack the plugin until https://github.com/jgm/pandoc/issues/6401 is resolved.
-				stdout = stdout.replace(
-					/reveal\.js plugins\n\s*plugins: \[/,
-					`reveal.js plugins\nplugins: [ PandocSlides,`,
-				);
 				return stdout;
 			} catch (error: any) {
 				vscode.window.showErrorMessage(`Failed to compile slides: ${error.stderr}.`);

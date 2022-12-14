@@ -99,6 +99,9 @@ $endif$
 $if(highlightjs)$
   <script src="$revealjs-url$/plugin/highlight/highlight.js"></script>
 $endif$
+$if(pandoc-slides-plugin-url)$
+  <script src="$pandoc-slides-plugin-url$"></script>
+$endif$
 
   <!-- other scripts to include -->
 $for(script)$
@@ -327,6 +330,9 @@ $if(mathjax)$
 $endif$
 $if(highlightjs)$
           RevealHighlight,
+$endif$
+$if(pandoc-slides-plugin-url)$
+          PandocSlides,
 $endif$
           RevealNotes,
           RevealSearch,
