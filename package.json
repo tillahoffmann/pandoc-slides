@@ -18,9 +18,13 @@
     "commands": [
       {
         "command": "pandoc-slides.sidePreview",
-        "title": "Show slides",
+        "title": "Pandoc Slides: Show Slides",
         "icon": "$(versions)",
         "_iconInfo": "https://microsoft.github.io/vscode-codicons/dist/codicon.html"
+      },
+      {
+        "command": "pandoc-slides.exportSlides",
+        "title": "Pandoc Slides: Export Slides"
       }
     ],
     "menus": {

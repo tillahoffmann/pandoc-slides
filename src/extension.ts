@@ -16,14 +16,15 @@ export function activate(context: vscode.ExtensionContext) {
 	// we don't need to manage singletons.
 	const slidePreviewPanel = new SlidePreviewPanel(context);
 	context.subscriptions.push(
-		vscode.commands.registerCommand("pandoc-slides.sidePreview", slidePreviewPanel.showPreview.bind(slidePreviewPanel)),
-		vscode.commands.registerCommand("pandoc-slides.jumpToSlide", slidePreviewPanel.jumpToSlide.bind(slidePreviewPanel)),
+		vscode.commands.registerCommand("pandoc-slides.sidePreview", slidePreviewPanel.showPreview, slidePreviewPanel),
+		vscode.commands.registerCommand("pandoc-slides.jumpToSlide", slidePreviewPanel.jumpToSlide, slidePreviewPanel),
 		vscode.languages.registerCodeLensProvider({
 			scheme: "file",
 			language: "markdown",
 		}, slidePreviewPanel.codeLensProvider),
-		vscode.workspace.onDidSaveTextDocument(slidePreviewPanel.onDidSaveTextDocument.bind(slidePreviewPanel)),
-		vscode.workspace.onDidChangeTextDocument(slidePreviewPanel.onDidChangeTextDocument.bind(slidePreviewPanel)),
+		vscode.workspace.onDidSaveTextDocument(slidePreviewPanel.onDidSaveTextDocument, slidePreviewPanel),
+		vscode.workspace.onDidChangeTextDocument(slidePreviewPanel.onDidChangeTextDocument, slidePreviewPanel),
+		vscode.commands.registerCommand("pandoc-slides.exportSlides", slidePreviewPanel.export, slidePreviewPanel),
 	);
 }
 
@@ -189,43 +190,57 @@ class SlidePreviewPanel {
 			this._panel.title = title;
 		}
 
-		this._panel.webview.html = await this._getHtmlContent();
+		this._panel.webview.html = await this._runPandoc(this._pairedEditor.document);
 		if (reveal) {
 			this._panel.reveal();
 		}
 	}
 
-	private async _getHtmlContent() {
+	public async export() {
+		// Abort if there is no active editor.
+		if (!vscode.window.activeTextEditor) {
+			return;
+		}
+		const document = vscode.window.activeTextEditor.document;
+		let fileName = path.parse(document.uri.fsPath);
+		fileName.ext = ".html";
+		fileName.base = "";
+		this._runPandoc(document, path.format(fileName));
+	}
+
+	private async _runPandoc(document: vscode.TextDocument, fileName?: string) {
 		// Load the frontmatter and set defaults. We'll be loading the active file and writing to
 		// stdout.
-		const document = this._pairedEditor!.document;
 		let frontmatter = yamlfrontmatter.loadFront(document.getText());
 		let pandoc = frontmatter.pandoc ?? {};
 		pandoc["input-file"] = document.fileName;
-		pandoc["output-file"] = "-";
+		pandoc["output-file"] = fileName ?? "-";
 		pandoc["to"] ??= "revealjs";
 		pandoc["from"] ??= "commonmark_x+sourcepos";
 		pandoc["template"] ??= vscode.Uri.joinPath(this._context.extensionUri, "assets", "default.revealjs").toString();
 
-		// Construct a path for the parent directory of this document so we can load local content.
-		const parentUri = vscode.Uri.file(path.dirname(document.fileName));
-		// Build the includes for the header.
 		let variables = setAttributeIfUndefined(pandoc, "variables", {});
-		setAttributeIfUndefined(variables, "header-includes", []).push([
-			`<meta name="parent-webview-uri" content="${this._panel!.webview.asWebviewUri(parentUri)}/">`,
-			// Random value to reload the webview every time.
-			`<meta name="webview-uuid" content="${uuid.v4()}">`,
-			// Slide indices for navigating to the most recently viewed frame after compilation.
-			`<meta name="slide-indices" content="${this._indexh},${this._indexv}">`,
-		]);
-		// Construct a path to the plugin code we need to interface with vscode.
-		const pluginUri = vscode.Uri.joinPath(this._context.extensionUri, "assets", "plugin.js");
-		variables["pandoc-slides-plugin-url"] = this._panel!.webview.asWebviewUri(pluginUri).toString();
-
 		// By default, let's use highlightjs for code ...
 		if(setAttributeIfUndefined(variables, "highlightjs", true)) {
 			// ... and disable the built-in highlighter.
 			setAttributeIfUndefined(pandoc, "highlight-style", null);
+		}
+
+		// We only need these modifications in the interactive mode.
+		if(!fileName) {
+			// Construct a path for the parent directory of this document so we can load local content.
+			const parentUri = vscode.Uri.file(path.dirname(document.fileName));
+			// Build the includes for the header.
+			setAttributeIfUndefined(variables, "header-includes", []).push([
+				`<meta name="parent-webview-uri" content="${this._panel!.webview.asWebviewUri(parentUri)}/">`,
+				// Random value to reload the webview every time.
+				`<meta name="webview-uuid" content="${uuid.v4()}">`,
+				// Slide indices for navigating to the most recently viewed frame after compilation.
+				`<meta name="slide-indices" content="${this._indexh},${this._indexv}">`,
+			]);
+			// Construct a path to the plugin code we need to interface with vscode.
+			const pluginUri = vscode.Uri.joinPath(this._context.extensionUri, "assets", "plugin.js");
+			variables["pandoc-slides-plugin-url"] = this._panel!.webview.asWebviewUri(pluginUri).toString();
 		}
 
 		// Create a temporary file ...
@@ -240,13 +255,17 @@ class SlidePreviewPanel {
 				return stdout;
 			} catch (error: any) {
 				vscode.window.showErrorMessage(`Failed to compile slides: ${error.stderr}.`);
-				const errorUri = vscode.Uri.joinPath(this._context.extensionUri, "assets",
-					vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Light ?
-					"error-light.svg" : "error-dark.svg");
-				return `
-				<h1><img src="${this._panel!.webview.asWebviewUri(errorUri)}"> Failed to compile slides.</h1>
-				<pre style="white-space: pre-wrap;">${error}</pre>
-				`;
+				if (fileName) {
+					return error;
+				} else {
+					const errorUri = vscode.Uri.joinPath(this._context.extensionUri, "assets",
+						vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Light ?
+						"error-light.svg" : "error-dark.svg");
+					return `
+					<h1><img src="${this._panel!.webview.asWebviewUri(errorUri)}"> Failed to compile slides.</h1>
+					<pre style="white-space: pre-wrap;">${error}</pre>
+					`;
+				}
 			}
 		}, {postfix: ".yaml"});
 		return html;
