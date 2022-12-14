@@ -34,7 +34,13 @@ $endif$
 $for(css)$
   <link rel="stylesheet" href="$css$"/>
 $endfor$
-<link rel="stylesheet" href="$revealjs-url$/plugin/highlight/monokai.css">
+$if(highlightjs)$
+$if(highlightjs-theme)$
+  <link rel="stylesheet" href="https://unpkg.com/@highlightjs/cdn-assets/styles/$highlightjs-theme$.min.css">
+$else$
+  <link rel="stylesheet" href="$revealjs-url$/plugin/highlight/monokai.css">
+$endif$
+$endif$
 $if(math)$
   $math$
 $endif$
